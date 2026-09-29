@@ -138,12 +138,51 @@ def _matches(db, terms, limit):
     ).fetchall()
 
 
-def _excerpt(row, terms):
-    lines = row["body"].splitlines()
+def excerpt(body, first_line, terms, focus=None, max_lines=8):
+    lines = body.splitlines()
     if not lines:
-        return int(row["line"]), ""
-    best = max(range(len(lines)), key=lambda offset: sum(term in lines[offset].lower() for term in terms))
-    return int(row["line"]) + best, lines[best].strip()[:220]
+        return int(first_line), ""
+    eligible = [offset for offset, line in enumerate(lines)
+                if line.strip() and not line.lstrip().startswith(("```", "~~~"))]
+    best = (focus if focus is not None else
+            max(eligible or [0], key=lambda offset: sum(term in lines[offset].lower() for term in terms)))
+    block = None
+    opening = None
+    for offset, text in enumerate(lines):
+        if text.lstrip().startswith(("```", "~~~")):
+            if opening is None:
+                opening = offset + 1
+            else:
+                if opening <= best < offset:
+                    block = (opening, offset)
+                opening = None
+    if block is None and opening is not None and opening <= best:
+        block = (opening, len(lines))
+    if block:
+        start, end = block
+        while start < end and not lines[start].strip():
+            start += 1
+        while end > start and not lines[end - 1].strip():
+            end -= 1
+        if end - start > max_lines:
+            start = best
+            while start > block[0] and lines[start - 1].rstrip().endswith("\\"):
+                start -= 1
+            end = start
+            while end < block[1] and lines[end].strip() and end - start < max_lines:
+                end += 1
+    else:
+        start = end = best
+        while start > 0 and lines[start - 1].strip():
+            start -= 1
+        while end + 1 < len(lines) and lines[end + 1].strip():
+            end += 1
+        end += 1
+        if end - start > max_lines:
+            start = max(start, min(best - 2, end - max_lines))
+            end = start + max_lines
+    selected = "\n".join(line.rstrip()[:220] for line in lines[start:end])
+    return int(first_line) + start, selected
 
 
 def search(db, query, limit=10):
@@ -168,6 +207,6 @@ def search(db, query, limit=10):
     rows = sorted(rows, key=order)[:limit]
     results = []
     for row in rows:
-        line, excerpt = _excerpt(row, expanded)
-        results.append({"path": row["path"], "line": line, "heading": row["heading"], "excerpt": excerpt, "score": round(-row["rank"], 6)})
+        line, snippet = excerpt(row["body"], row["line"], expanded)
+        results.append({"path": row["path"], "line": line, "heading": row["heading"], "excerpt": snippet, "score": round(-row["rank"], 6)})
     return results

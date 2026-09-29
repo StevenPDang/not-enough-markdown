@@ -69,6 +69,40 @@ class SearchTests(unittest.TestCase):
         refresh_index(self.db, self.root)
         self.assertEqual(search(self.db, "compile settings")[0]["path"], "two.md")
 
+    def test_excerpt_keeps_relevant_code_block_and_caps_prose(self):
+        (self.root / "commands.md").write_text(
+            "# Evaluation\nRun this command:\n\n```sh\n"
+            "pixi run eval --checkpoint rt-j \\\n"
+            "  --pre-dir relbench \\\n"
+            "  --out-dir eval_out\n```\n", encoding="utf-8")
+        (self.root / "prose.md").write_text(
+            "# Long explanation\n" + "\n".join("Context line %d" % n for n in range(12))
+            + "\nThe answer is here.\n", encoding="utf-8")
+        refresh_index(self.db, self.root)
+        command = search(self.db, "eval checkpoint")[0]
+        self.assertEqual(command["line"], 5)
+        self.assertEqual(command["excerpt"].count("\n"), 2)
+        self.assertIn("--out-dir eval_out", command["excerpt"])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            main(["fetch", "eval checkpoint", "--root", str(self.root),
+                  "--index", str(Path(self.temp.name) / "snippet.sqlite3")])
+        self.assertIn("\n    --pre-dir relbench", output.getvalue())
+        prose = next(hit for hit in search(self.db, "answer", 10) if hit["path"] == "prose.md")
+        self.assertLessEqual(len(prose["excerpt"].splitlines()), 8)
+        self.assertIn("The answer is here.", prose["excerpt"])
+
+    def test_long_code_block_shows_matching_command_stanza(self):
+        (self.root / "commands.md").write_text(
+            "# Commands\n```sh\n" + "\n".join("echo setup%d" % n for n in range(9))
+            + "\n\npixi run deploy --environment production \\\n"
+            + "  --region us-east-1\n```\n", encoding="utf-8")
+        refresh_index(self.db, self.root)
+        hit = search(self.db, "deploy production")[0]
+        self.assertLessEqual(len(hit["excerpt"].splitlines()), 8)
+        self.assertTrue(hit["excerpt"].startswith("pixi run deploy"))
+        self.assertIn("--region us-east-1", hit["excerpt"])
+
     def test_git_ignored_docs_are_excluded(self):
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
         (self.root / ".gitignore").write_text("private.md\n", encoding="utf-8")

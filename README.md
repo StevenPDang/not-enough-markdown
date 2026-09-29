@@ -35,7 +35,48 @@ The index lives in `~/.cache/urag` by default, outside the searched project. Set
 
 Fetch uses SQLite FTS5 with heading-weighted ranking and a small set of common development term aliases. If a query has no results, it tries close spellings of indexed terms. Everything runs offline; no document text leaves your machine. This first version does lexical search, so questions phrased with concepts absent from the docs may need different wording.
 
+## Optional semantic graph
+
+For concept matching, Urag can build a local semantic graph from the same documentation sections and use a contextual token encoder at query time. It stores document, chunk, token-meaning, and chunk-to-meaning links in the SQLite index. `fetch --semantic` refreshes changed docs and the graph, then constructs a query-specific co-occurrence graph to rank sections. The default `fetch` behavior remains lexical.
+
+### Recommended model
+
+The recommended encoder is [Microsoft's DeBERTa-v3-large](https://huggingface.co/microsoft/deberta-v3-large). LiteSemRAG used DeBERTa-v3-large for contextual token embeddings; it does not provide a separate LiteSemRAG model checkpoint. [LiteSemRAG paper](https://arxiv.org/html/2604.16350v1)
+
+### Setup
+
+From the `urag-fetch` source root, install Urag with its optional semantic dependencies, then download the model files into the user cache. The download command selects the PyTorch weights and tokenizer files needed by Urag:
+
+```sh
+uv tool install --editable '.[semantic]'
+uv tool run --from huggingface_hub hf download microsoft/deberta-v3-large \
+  config.json pytorch_model.bin spm.model tokenizer_config.json \
+  --local-dir ~/.cache/urag/models/deberta-v3-large
+```
+
+If you use the development `.venv` instead, run `uv pip install -e '.[semantic]'` and invoke `./.venv/bin/urag`. The model download needs an internet connection; indexing and fetching load only local files and do not call an API.
+
+If Urag was installed before `protobuf` was added to the semantic dependencies, run `uv tool install --force --editable '.[semantic]'` from this source root to update its tool environment. A missing `protobuf` package can cause Transformers to fail while converting DeBERTa's SentencePiece tokenizer.
+
+When the DeBERTa checkpoint loads as an encoder, Urag condenses its unused prediction-head weight report into one line. Reports about missing or other unexpected weights remain visible.
+
+### Index and fetch
+
+After setup, change into the project whose documentation you want to search. Urag uses the current directory as the project root by default:
+
+```sh
+cd /path/to/your/project
+urag config set semantic-model ~/.cache/urag/models/deberta-v3-large
+urag index --semantic
+urag fetch "How do I run an evaluation with SQL sampling?" \
+  --semantic
+```
+
+The config command saves the model directory in `~/.config/urag/config.json` (or under `XDG_CONFIG_HOME`). Use `urag config get semantic-model` to inspect it or `urag config unset semantic-model` to remove it. The key `URAG_SEMANTIC_MODEL` is also accepted by the config command. For a one-off model, `--model PATH` takes precedence; the `URAG_SEMANTIC_MODEL` environment variable overrides the saved setting. Replace the example query with a question about that project's docs. The first graph build encodes every indexed section and may be slow with a large model. A changed document currently rebuilds the semantic graph for the whole repository. The graph uses a simple similarity threshold to separate token meanings, rather than the paper's HDBSCAN and adaptive anomaly handling, so this is a LiteSemRAG-inspired implementation, not an exact reproduction. Semantic relevance depends on the chosen encoder and should be measured on your own queries.
+
 Terminal results highlight the source location and separate matches with a blank line. Redirected output and `NO_COLOR=1` use plain text; `--json` always emits unstyled JSON. Formatting has no external dependencies.
+
+Result excerpts show up to eight source lines. A matching code block is shown in full when it fits; longer blocks show the relevant command stanza.
 
 ## Development
 
