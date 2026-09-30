@@ -11,15 +11,7 @@ nemd is a local CLI for searching documentation in a project. Its name is a nod 
 
 ## Demo
 
-From a project directory, search its documentation:
-
-```sh
-nemd search "deployment options"
-nemd s "build settings" --limit 5
-```
-
-Results include a `path:line` location and an excerpt. In a terminal, choose a result to read the full document near the match.
-
+`![nemd search demo](docs/demo.gif)`
 ## Getting Started
 
 Requires Python 3.9+ with SQLite FTS5 (included in common Python builds).
