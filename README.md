@@ -1,13 +1,13 @@
 # Not Enough Markdown
 
-nemd is a local CLI for searching documentation in a project. Its name is a nod to the Minecraft mod Not Enough Items (NEI). It indexes Markdown, MDX, reStructuredText, AsciiDoc, and plain text, then returns matching passages with file paths and line numbers. Search refreshes the index automatically, so edited docs appear in the next query.
+nemd is a CLI you can install with `uv` to fuzzy search documentation in a codebase. It builds a local SQLite index of document sections, including Markdown headings, code blocks, and identifiers, then returns the top `k` matching passages with source paths and line numbers. Search refreshes the index automatically when documents change. The name is a nod to the Minecraft mod Not Enough Items (NEI).
 
 ## Features
 
-- Local search across Markdown, MDX, reStructuredText, AsciiDoc, and plain text.
-- Ranked results with excerpts, source paths, line numbers, and an interactive terminal viewer.
-- Automatic index refresh, typo matching, and offline operation.
-- \*\*Experimental\*\* semantic search: optional local model and semantic graph for concept matching.
+- Search Markdown, MDX, reStructuredText, AsciiDoc, and plain-text documentation with ranked excerpts and `path:line` locations.
+- Open a result in an interactive terminal viewer, or use `--json` for machine-readable output.
+- Refresh changed documents automatically; match common development terms and close spellings.
+- **Experimental semantic search:** use an optional local model for concept matching.
 
 ## Demo
 
@@ -19,103 +19,72 @@ Demo repository: [RelBench by Stanford STAR](https://github.com/stanford-star/re
 
 Requires Python 3.9+ with SQLite FTS5 (included in common Python builds).
 
+### Install
+
 Install from this source checkout:
 
 ```sh
-cd /path/to/not-enough-markdown
+cd /path/to/your/nemd/checkout
 uv tool install --editable .
-cd /path/to/your/project
-
 ```
 
-Then to start querying:
+If `nemd` is not on your `PATH`, run `uv tool update-shell` and open a new terminal. The tool is installed for your user account; projects you search do not need their own nemd installation.
+
+### Search
+
+From the project whose documentation you want to search:
 
 ```sh
 cd /path/to/your/project
-nemd index
-nemd search "How to compile with fast settings?"
-nemd search "deployment options" --limit 5 --json
+nemd search "How do I configure deployment?"
+nemd s "build settings" --limit 5
+nemd search "deployment options" --json
 ```
 
-Use `nemd s "query"` as shorthand for `nemd search "query"`.
+`nemd s` is shorthand for `nemd search`. By default, search uses the current directory and returns up to 10 results. Use `--root PATH` to search another project. Each result includes an excerpt and a source location. In an interactive terminal, choose a result to read the document near the match; use Backspace to return to results or Enter or Esc to close. Redirected output and `NO_COLOR=1` use plain text.
 
-If `nemd` is not on your `PATH` after installation, run `uv tool update-shell` and open a new terminal. This installs one tool for your user account; searched projects do not need their own virtual environments or Nemd dependency. The index remains separate for each project.
-
-If you previously installed the CLI under its old name, reinstall from this checkout to create the `nemd` command. The new cache and config paths are separate; set `semantic-model` again if you had saved one under the old name. Existing model files can be reused by passing their path to `nemd config set semantic-model`.
-
-For development in this source repository, an editable project environment also works:
-
-```sh
-uv venv
-uv pip install -e .
-./.venv/bin/nemd search "How to install"
-```
-
-Alternatively, run `source .venv/bin/activate` first; then `nemd` is available on your shell's `PATH` until you deactivate the environment.
-
-You can search another project with `--root /path/to/project`. `python3 -m nemd search ...` also works when Nemd is installed in that Python environment.
-
-The index lives in `~/.cache/nemd` by default, outside the searched project. Set `NEMD_CACHE_DIR` or pass `--index PATH` to choose another location. In Git repos, Nemd respects ignored untracked files. In directories without Git, it skips common generated and dependency directories. Files larger than 2 MB are skipped.
+Search uses SQLite FTS5. It runs offline and does not send document text to an API. In Git repositories, it respects ignored untracked files. Outside Git, it skips common generated and dependency directories. Files larger than 2 MB are skipped.
 
 ### Indexing
 
-`nemd index` scans the project's documentation and saves searchable sections, headings, file paths, and line numbers in a per-project SQLite database. It updates changed files and removes entries for deleted files. This lets search rank matching passages and point you to their source without modifying the documents.
+An index is a per-project SQLite database of searchable document sections, headings, file paths, and line numbers. `nemd search` creates or refreshes it automatically before each query, including changes and deletions. It does not modify the source documents.
 
-Running `nemd index` is optional: `nemd search` creates or refreshes the index automatically before every query. Run it explicitly to prepare the index ahead of time or to see how many documents changed:
+Run `nemd index` if you want to prepare the index ahead of time or see how many documents changed:
 
 ```sh
 nemd index
 ```
 
-### Searching
-
-Search uses SQLite FTS5 with heading-weighted ranking and a small set of common development term aliases. If a query has no results, it tries close spellings of indexed terms. Everything runs offline; no document text leaves your machine. This first version does lexical search, so questions phrased with concepts absent from the docs may need different wording.
-
-Search returns the top 10 ranked matches by default; use `--limit K` to choose how many candidates to see. In an interactive terminal, an inline prompt shows their source locations and short previews. Use the arrow keys or Tab to move through the choices, then Enter or a mouse click to expand a match. Nemd writes the entire rendered document to terminal scrollback, then opens a focused view near the matched line. Scroll with the arrow or Page keys, use Backspace to return to the results, or Enter or Esc to close. The controls line clears when you leave the view. The reading position remains visible when you exit, and the complete document remains in scrollback for copying or reference. Markdown headings, code blocks, quotes, lists, and inline code are highlighted without a line number gutter. Mouse selection requires a terminal that supports mouse reporting. Redirected output and `NO_COLOR=1` use plain text; `--json` always emits unstyled JSON. Formatting has no external dependencies.
-
-Result excerpts show up to eight source lines. A matching code block is shown in full when it fits; longer blocks show the relevant command stanza.
+Indexes live outside the project in `~/.cache/nemd` by default. Set `NEMD_CACHE_DIR` or pass `--index PATH` to use another location.
 
 ### Experimental semantic search
 
-For concept matching, Nemd can build a local semantic graph from the same documentation sections and use a contextual token encoder at query time. It stores document, chunk, token-meaning, and chunk-to-meaning links in the SQLite index. `search --semantic` refreshes changed docs and the graph, then constructs a query-specific co-occurrence graph to rank sections. The default `search` behavior remains lexical.
+Semantic search builds a local graph from the indexed sections and uses a contextual token encoder to match concepts. It requires an optional model download; ordinary `nemd search` remains lexical. Relevance depends on the model and your project's documents, so evaluate results against your own queries.
 
-#### Recommended model
-
-The recommended encoder is [Microsoft's DeBERTa-v3-large](https://huggingface.co/microsoft/deberta-v3-large). LiteSemRAG used DeBERTa-v3-large for contextual token embeddings; it does not provide a separate LiteSemRAG model checkpoint. [LiteSemRAG paper](https://arxiv.org/html/2604.16350v1)
-
-#### Setup
-
-From the `nemd` source root, install Nemd with its optional semantic dependencies, then download the model files into the user cache. The download command selects the PyTorch weights and tokenizer files needed by Nemd:
+The recommended encoder is [Microsoft's DeBERTa-v3-large](https://huggingface.co/microsoft/deberta-v3-large). Install the optional dependencies from this checkout and download the model:
 
 ```sh
-uv tool install --editable '.[semantic]'
+cd /path/to/your/nemd/checkout
+uv tool install --force --editable '.[semantic]'
 uv tool run --from huggingface_hub hf download microsoft/deberta-v3-large \
   config.json pytorch_model.bin spm.model tokenizer_config.json \
   --local-dir ~/.cache/nemd/models/deberta-v3-large
 ```
 
-If you use the development `.venv` instead, run `uv pip install -e '.[semantic]'` and invoke `./.venv/bin/nemd`. The model download needs an internet connection; indexing and searching load only local files and do not call an API.
-
-If an earlier editable install lacks `protobuf`, run `uv tool install --force --editable '.[semantic]'` from this source root to update its tool environment. A missing `protobuf` package can cause Transformers to fail while converting DeBERTa's SentencePiece tokenizer.
-
-When the DeBERTa checkpoint loads as an encoder, Nemd condenses its unused prediction-head weight report into one line. Reports about missing or other unexpected weights remain visible.
-
-#### Index and search
-
-After setup, change into the project whose documentation you want to search. Nemd uses the current directory as the project root by default:
+Then search a project with the model:
 
 ```sh
 cd /path/to/your/project
 nemd config set semantic-model ~/.cache/nemd/models/deberta-v3-large
-nemd index --semantic
-nemd search "How do I run an evaluation with SQL sampling?" \
-  --semantic
+nemd search "How do I run an evaluation with SQL sampling?" --semantic
 ```
 
-The config command saves the model directory in `~/.config/nemd/config.json` (or under `XDG_CONFIG_HOME`). Use `nemd config get semantic-model` to inspect it or `nemd config unset semantic-model` to remove it. The key `NEMD_SEMANTIC_MODEL` is also accepted by the config command. For a one-off model, `--model PATH` takes precedence; the `NEMD_SEMANTIC_MODEL` environment variable overrides the saved setting. Replace the example query with a question about that project's docs. The first graph build encodes every indexed section and may be slow with a large model. A changed document currently rebuilds the semantic graph for the whole repository. The graph uses a simple similarity threshold to separate token meanings, rather than the paper's HDBSCAN and adaptive anomaly handling, so this is a LiteSemRAG-inspired implementation, not an exact reproduction. Semantic relevance depends on the chosen encoder and should be measured on your own queries.
+The model setting is saved in `~/.config/nemd/config.json` (or under `XDG_CONFIG_HOME`). Use `nemd config get semantic-model` or `nemd config unset semantic-model` to inspect or remove it. For one query, `--model PATH` takes precedence over `NEMD_SEMANTIC_MODEL`, which takes precedence over the saved setting. The first graph build can be slow, and changing a document currently rebuilds the whole semantic graph. This is a LiteSemRAG-inspired implementation, rather than an exact reproduction of the [paper](https://arxiv.org/html/2604.16350v1).
 
 ### Development
 
 ```sh
-python3 -m unittest discover -s tests
+uv venv
+uv pip install -e .
+./.venv/bin/python -m unittest discover -s tests
 ```
