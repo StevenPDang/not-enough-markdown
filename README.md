@@ -7,7 +7,7 @@ nemd is a local CLI for searching documentation in a project. Its name is a nod 
 - Local search across Markdown, MDX, reStructuredText, AsciiDoc, and plain text.
 - Ranked results with excerpts, source paths, line numbers, and an interactive terminal viewer.
 - Automatic index refresh, typo matching, and offline operation.
-- \**Experimental\** semantic search: optional local model and semantic graph for *more* natural language queries.
+- \*\*Experimental\*\* semantic search: optional local model and semantic graph for concept matching.
 
 ## Demo
 
@@ -27,12 +27,19 @@ Requires Python 3.9+ with SQLite FTS5 (included in common Python builds).
 Install from this source checkout:
 
 ```sh
-cd /path/to/doc-engine
+cd /path/to/not-enough-markdown
 uv tool install --editable .
 cd /path/to/your/project
+
+```
+
+Then to start querying:
+
+```sh
+cd /path/to/your/project
+nemd index
 nemd search "How to compile with fast settings?"
 nemd search "deployment options" --limit 5 --json
-nemd index
 ```
 
 Use `nemd s "query"` as shorthand for `nemd search "query"`.
@@ -54,6 +61,18 @@ Alternatively, run `source .venv/bin/activate` first; then `nemd` is available o
 You can search another project with `--root /path/to/project`. `python3 -m nemd search ...` also works when Nemd is installed in that Python environment.
 
 The index lives in `~/.cache/nemd` by default, outside the searched project. Set `NEMD_CACHE_DIR` or pass `--index PATH` to choose another location. In Git repos, Nemd respects ignored untracked files. In directories without Git, it skips common generated and dependency directories. Files larger than 2 MB are skipped.
+
+### Indexing
+
+`nemd index` scans the project's documentation and saves searchable sections, headings, file paths, and line numbers in a per-project SQLite database. It updates changed files and removes entries for deleted files. This lets search rank matching passages and point you to their source without modifying the documents.
+
+Running `nemd index` is optional: `nemd search` creates or refreshes the index automatically before every query. Run it explicitly to prepare the index ahead of time or to see how many documents changed:
+
+```sh
+nemd index
+```
+
+### Searching
 
 Search uses SQLite FTS5 with heading-weighted ranking and a small set of common development term aliases. If a query has no results, it tries close spellings of indexed terms. Everything runs offline; no document text leaves your machine. This first version does lexical search, so questions phrased with concepts absent from the docs may need different wording.
 
