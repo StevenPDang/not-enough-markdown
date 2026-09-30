@@ -21,7 +21,7 @@ Requires Python 3.9+ with SQLite FTS5 (included in common Python builds).
 
 ### Install
 
-Once published on PyPI, install the CLI with uv:
+To install the CLI with uv, use:
 
 ```sh
 uv tool install nemd
