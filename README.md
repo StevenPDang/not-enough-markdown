@@ -11,7 +11,7 @@ nemd is a CLI you can install with `uv` to fuzzy search documentation in a codeb
 
 ## Demo
 
-![nemd search demo](docs/demo.gif)
+![nemd search demo](https://raw.githubusercontent.com/StevenPDang/not-enough-markdown/main/docs/demo.gif)
 
 Demo repository: [RelBench by Stanford STAR](https://github.com/stanford-star/relbench).
 
@@ -21,7 +21,13 @@ Requires Python 3.9+ with SQLite FTS5 (included in common Python builds).
 
 ### Install
 
-Install from this source checkout:
+Once published on PyPI, install the CLI with uv:
+
+```sh
+uv tool install nemd
+```
+
+To install from a source checkout instead:
 
 ```sh
 cd /path/to/your/nemd/checkout
@@ -61,11 +67,9 @@ Indexes live outside the project in `~/.cache/nemd` by default. Set `NEMD_CACHE_
 
 Semantic search builds a local graph from the indexed sections and uses a contextual token encoder to match concepts. It requires an optional model download; ordinary `nemd search` remains lexical. Relevance depends on the model and your project's documents, so evaluate results against your own queries.
 
-The recommended encoder is [Microsoft's DeBERTa-v3-large](https://huggingface.co/microsoft/deberta-v3-large). Install the optional dependencies from this checkout and download the model:
+The recommended encoder is [Microsoft's DeBERTa-v3-large](https://huggingface.co/microsoft/deberta-v3-large). Once published on PyPI, install the optional dependencies with `uv tool install --force 'nemd[semantic]'`. From a source checkout, use `uv tool install --force --editable '.[semantic]'`. Then download the model:
 
 ```sh
-cd /path/to/your/nemd/checkout
-uv tool install --force --editable '.[semantic]'
 uv tool run --from huggingface_hub hf download microsoft/deberta-v3-large \
   config.json pytorch_model.bin spm.model tokenizer_config.json \
   --local-dir ~/.cache/nemd/models/deberta-v3-large

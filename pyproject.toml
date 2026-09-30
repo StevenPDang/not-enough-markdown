@@ -1,3 +1,25 @@
 [build-system]
-requires = ["setuptools>=40.8"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "nemd"
+version = "0.1.0"
+description = "Fuzzy search for documentation in a codebase"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["documentation", "search", "sqlite", "cli"]
+
+[project.optional-dependencies]
+semantic = ["torch", "transformers", "sentencepiece", "protobuf"]
+
+[project.scripts]
+nemd = "nemd.cli:main"
+
+[project.urls]
+Repository = "https://github.com/StevenPDang/not-enough-markdown"
+
+[tool.setuptools.packages.find]
+where = ["src"]
