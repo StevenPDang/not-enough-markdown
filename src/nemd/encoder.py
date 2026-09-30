@@ -37,7 +37,7 @@ def _load_model(auto_model, path):
     other_issues = any(info.get(key) for key in ("missing_keys", "mismatched_keys", "error_msgs"))
     expected_heads = all(key.startswith(("mask_predictions.", "lm_predictions.")) for key in unexpected)
     if unexpected and expected_heads and not other_issues:
-        print("urag: model loaded; ignored %d unused prediction-head weights." % len(unexpected),
+        print("nemd: model loaded; ignored %d unused prediction-head weights." % len(unexpected),
               file=sys.stderr)
     else:
         for record in report_filter.records:

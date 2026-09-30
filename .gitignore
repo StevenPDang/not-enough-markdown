@@ -4,6 +4,6 @@ __pycache__/
 .venv/
 build/
 dist/
-.urag/
+.nemd/
 research.md
 spec.md

@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from urag.search import open_index, refresh_index, search
-from urag.semantic import build_graph, graph_ready, semantic_search
-from urag.cli import main
+from nemd.search import open_index, refresh_index, search
+from nemd.semantic import build_graph, graph_ready, semantic_search
+from nemd.cli import main
 
 
 class FakeEncoder:
@@ -89,13 +89,13 @@ class SemanticGraphTests(unittest.TestCase):
         self.assertIn("\n  --pre-dir relbench-preprocessed", hits[0]["excerpt"])
         self.assertIn("\n  --out-dir eval_out", hits[0]["excerpt"])
 
-    def test_fetch_builds_graph_and_queries_it(self):
+    def test_search_builds_graph_and_queries_it(self):
         (self.root / "sampling.md").write_text(
             "# SQL sampling\nRun inference with SQL sampling.\n", encoding="utf-8")
         output = io.StringIO()
-        args = ["fetch", "evaluation sql sampling", "--semantic", "--model", "local-model",
+        args = ["search", "evaluation sql sampling", "--semantic", "--model", "local-model",
                 "--root", str(self.root), "--index", str(Path(self.temp.name) / "cli.sqlite3")]
-        with patch("urag.encoder.LocalTokenEncoder", return_value=self.encoder), redirect_stdout(output):
+        with patch("nemd.encoder.LocalTokenEncoder", return_value=self.encoder), redirect_stdout(output):
             self.assertEqual(main(args), 0)
         self.assertIn("sampling.md", output.getvalue())
 

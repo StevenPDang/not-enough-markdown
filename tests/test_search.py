@@ -11,8 +11,8 @@ import os
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from urag.search import open_index, refresh_index, search
-from urag.cli import main
+from nemd.search import open_index, refresh_index, search
+from nemd.cli import main, _markdown_kinds, _pick_result, _read_key, _view_result
 
 
 class TtyBuffer(io.StringIO):
@@ -85,7 +85,7 @@ class SearchTests(unittest.TestCase):
         self.assertIn("--out-dir eval_out", command["excerpt"])
         output = io.StringIO()
         with redirect_stdout(output):
-            main(["fetch", "eval checkpoint", "--root", str(self.root),
+            main(["search", "eval checkpoint", "--root", str(self.root),
                   "--index", str(Path(self.temp.name) / "snippet.sqlite3")])
         self.assertIn("\n    --pre-dir relbench", output.getvalue())
         prose = next(hit for hit in search(self.db, "answer", 10) if hit["path"] == "prose.md")
@@ -112,31 +112,164 @@ class SearchTests(unittest.TestCase):
         self.assertFalse(search(self.db, "hidden"))
         self.assertTrue(search(self.db, "visible"))
 
-    def test_fetch_command_returns_matching_passage(self):
+    def test_search_command_returns_matching_passage(self):
         (self.root / "install.md").write_text("# Install\nRun the setup command.\n", encoding="utf-8")
         output = io.StringIO()
         with redirect_stdout(output):
-            status = main(["fetch", "setup", "--root", str(self.root), "--index", str(Path(self.temp.name) / "cli.sqlite3")])
+            status = main(["search", "setup", "--root", str(self.root), "--index", str(Path(self.temp.name) / "cli.sqlite3")])
         self.assertEqual(status, 0)
         self.assertIn("install.md:2 [Install]", output.getvalue())
 
-    def test_fetch_styles_tty_but_respects_no_color(self):
+    def test_s_alias_returns_matching_passage(self):
         (self.root / "install.md").write_text("# Install\nRun the setup command.\n", encoding="utf-8")
-        args = ["fetch", "setup", "--root", str(self.root), "--index", str(Path(self.temp.name) / "cli.sqlite3")]
+        output = io.StringIO()
+        with redirect_stdout(output):
+            status = main(["s", "setup", "--root", str(self.root),
+                           "--index", str(Path(self.temp.name) / "cli.sqlite3")])
+        self.assertEqual(status, 0)
+        self.assertIn("install.md:2 [Install]", output.getvalue())
+
+    def test_search_styles_tty_but_respects_no_color(self):
+        (self.root / "install.md").write_text("# Install\nRun the setup command.\n", encoding="utf-8")
+        args = ["search", "setup", "--root", str(self.root), "--index", str(Path(self.temp.name) / "cli.sqlite3")]
         styled = TtyBuffer()
         with patch.dict(os.environ, {"NO_COLOR": ""}), redirect_stdout(styled):
             main(args)
-        self.assertIn("\x1b[1;36minstall.md:2\x1b[0m", styled.getvalue())
+        self.assertIn("\x1b[1;36minstall.md:2 [Install]\x1b[0m", styled.getvalue())
+        self.assertIn("\x1b]8;;{}#L2\x1b\\".format((self.root / "install.md").resolve().as_uri()), styled.getvalue())
         plain = TtyBuffer()
         with patch.dict(os.environ, {"NO_COLOR": "1"}), redirect_stdout(plain):
             main(args)
         self.assertNotIn("\x1b[", plain.getvalue())
+        self.assertNotIn("\x1b]8;", plain.getvalue())
+
+    def test_search_limits_ranked_results(self):
+        for name in ("one.md", "two.md", "three.md"):
+            (self.root / name).write_text("# Install\nRun setup.\n", encoding="utf-8")
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(main(["search", "setup", "--limit", "2", "--root", str(self.root),
+                                   "--index", str(Path(self.temp.name) / "cli.sqlite3")]), 0)
+        self.assertEqual(output.getvalue().count("[Install]"), 2)
+
+    def test_interactive_search_leaves_document_view_as_final_output(self):
+        (self.root / "one.md").write_text("# First\nsetup first step\nsecond step\n", encoding="utf-8")
+        (self.root / "two.md").write_text("# Second\nsetup another step\nlast step\n", encoding="utf-8")
+        output = TtyBuffer()
+        with patch.object(sys, "stdin", TtyBuffer()), \
+                patch("nemd.cli._choose_result") as choose, \
+                redirect_stdout(output):
+            self.assertEqual(main(["search", "setup", "--root", str(self.root),
+                                   "--index", str(Path(self.temp.name) / "cli.sqlite3")]), 0)
+        self.assertEqual(len(choose.call_args.args[0]), 2)
+        self.assertEqual(choose.call_args.args[1], self.root.resolve())
+        self.assertEqual(output.getvalue(), "")
+
+    def test_interactive_search_allows_cancelling_selection(self):
+        (self.root / "one.md").write_text("# First\nsetup first step\nsecond step\n", encoding="utf-8")
+        output = TtyBuffer()
+        with patch.object(sys, "stdin", TtyBuffer()), patch("nemd.cli._choose_result", return_value=None), \
+                redirect_stdout(output):
+            self.assertEqual(main(["search", "setup", "--root", str(self.root),
+                                   "--index", str(Path(self.temp.name) / "cli.sqlite3")]), 0)
+        self.assertEqual(output.getvalue(), "")
+
+    def test_picker_scrolls_with_arrows_and_tab(self):
+        results = [{"path": "doc%d.md" % n, "line": n, "heading": "Topic %d" % n,
+                    "excerpt": "Preview %d" % n} for n in range(5)]
+        keys = iter(["down", "down", "choose"])
+        output = io.StringIO()
+        self.assertIs(_pick_result(results, lambda: next(keys), output, 80, 6), results[2])
+        self.assertIn("> doc2.md", output.getvalue())
+        self.assertIn("\x1b[3A", output.getvalue())
+        colored = io.StringIO()
+        self.assertIs(_pick_result(results, lambda: "choose", colored, 80, 6, color=True), results[0])
+        self.assertIn("\x1b[1;36mdoc0.md:0 [Topic 0]\x1b[0m - Preview 0", colored.getvalue())
+        keys = iter(["down", "down", "down", "choose"])
+        self.assertIs(_pick_result(results, lambda: next(keys), io.StringIO(), 80, 6), results[3])
+
+    def test_picker_wraps_and_cancels(self):
+        results = [{"path": "doc%d.md" % n, "line": n, "heading": "", "excerpt": "Preview"}
+                   for n in range(3)]
+        keys = iter(["up", "choose"])
+        self.assertIs(_pick_result(results, lambda: next(keys), io.StringIO(), 80, 6), results[-1])
+        output = io.StringIO()
+        self.assertIsNone(_pick_result(results, lambda: "cancel", output, 80, 6))
+        self.assertIn("doc0.md", output.getvalue())
+        self.assertTrue(output.getvalue().endswith("\r\n"))
+        self.assertNotIn("\x1b[J", output.getvalue())
+
+    def test_clicking_result_opens_that_match(self):
+        results = [{"path": "doc%d.md" % n, "line": n, "heading": "", "excerpt": "Preview"}
+                   for n in range(3)]
+        chosen = _pick_result(results, lambda: ("click", 8, 11), io.StringIO(), 80, 6,
+                              cursor_row=lambda: 12)
+        self.assertIs(chosen, results[1])
+
+    def test_reads_mouse_click_and_arrow_keys(self):
+        for sequence, expected in ((b"\x1b[<0;8;11M", ("click", 8, 11)),
+                                   (b"\x1b[B", "down"), (b"\x1b[6~", "page_down")):
+            reader, writer = os.pipe()
+            try:
+                os.write(writer, sequence)
+                self.assertEqual(_read_key(reader), expected)
+            finally:
+                os.close(reader)
+                os.close(writer)
+
+    def test_expanded_result_starts_near_match_and_scrolls(self):
+        (self.root / "guide.md").write_text(
+            "\n".join("line %d" % n for n in range(1, 31)) + "\n", encoding="utf-8")
+        hit = {"path": "guide.md", "line": 15, "heading": "Guide", "excerpt": "line 15"}
+        output = io.StringIO()
+        keys = iter(["down", "page_down", "up", "back"])
+        self.assertEqual(_view_result(hit, self.root, lambda: next(keys), output, 80, 10), "back")
+        self.assertIn("guide.md:15 [Guide]", output.getvalue())
+        self.assertIn("> line 15", output.getvalue())
+        self.assertNotIn("    15  line 15", output.getvalue())
+        self.assertIn("line 21", output.getvalue())
+        self.assertLess(output.getvalue().index("line 30"), output.getvalue().index("guide.md:15 [Guide]"))
+        self.assertTrue(output.getvalue().endswith("\r\x1b[2K\r\n"))
+        self.assertNotIn("\x1b[J", output.getvalue())
+
+    def test_expanded_result_can_close_with_escape_or_enter(self):
+        (self.root / "guide.md").write_text("one\ntwo\nthree\n", encoding="utf-8")
+        hit = {"path": "guide.md", "line": 2, "heading": "", "excerpt": "two"}
+        for key in ("cancel", "choose"):
+            with self.subTest(key=key):
+                output = io.StringIO()
+                self.assertEqual(_view_result(hit, self.root, lambda: key, output, 80, 10), key)
+                self.assertIn("Enter/Esc: close", output.getvalue())
+                self.assertTrue(output.getvalue().endswith("\r\x1b[2K\r\n"))
+
+    def test_expanded_result_highlights_markdown_without_line_numbers(self):
+        (self.root / "guide.md").write_text(
+            "# Title\nParagraph with `command`.\n## Details\n> Quoted text\n- List item\n"
+            "```sh\necho hello\n```\n", encoding="utf-8")
+        hit = {"path": "guide.md", "line": 7, "heading": "Details", "excerpt": "echo hello"}
+        styled = io.StringIO()
+        self.assertEqual(_view_result(hit, self.root, lambda: "cancel", styled, 80, 20, color=True),
+                         "cancel")
+        shown = styled.getvalue()
+        for fragment in ("\x1b[1;36m## Details\x1b[0m", "\x1b[3;32m> Quoted text\x1b[0m",
+                         "\x1b[33m- List item\x1b[0m", "\x1b[2m```sh\x1b[0m",
+                         "\x1b[32mecho hello\x1b[0m", "\x1b[32m`command`\x1b[0m"):
+            self.assertIn(fragment, shown)
+        self.assertIn("> \x1b[32mecho hello\x1b[0m", shown)
+        plain = io.StringIO()
+        _view_result(hit, self.root, lambda: "cancel", plain, 80, 20, color=False)
+        self.assertNotIn("\x1b[32m", plain.getvalue())
+
+    def test_code_style_survives_scrolling_past_fence(self):
+        lines = ["```python", "one", "two", "three", "four", "five", "```", "## Next"]
+        self.assertEqual(_markdown_kinds(lines),
+                         ["fence", "code", "code", "code", "code", "code", "fence", "heading"])
 
     def test_json_remains_machine_readable_on_tty(self):
         (self.root / "install.md").write_text("# Install\nRun the setup command.\n", encoding="utf-8")
         output = TtyBuffer()
         with redirect_stdout(output):
-            main(["fetch", "setup", "--json", "--root", str(self.root), "--index", str(Path(self.temp.name) / "cli.sqlite3")])
+            main(["search", "setup", "--json", "--root", str(self.root), "--index", str(Path(self.temp.name) / "cli.sqlite3")])
         self.assertEqual(json.loads(output.getvalue())[0]["path"], "install.md")
 
 

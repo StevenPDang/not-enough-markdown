@@ -27,7 +27,7 @@ SCHEMA_VERSION = 1
 
 
 def default_index_path(root):
-    cache = Path(os.environ.get("URAG_CACHE_DIR", Path.home() / ".cache" / "urag"))
+    cache = Path(os.environ.get("NEMD_CACHE_DIR", Path.home() / ".cache" / "nemd"))
     key = hashlib.sha256(str(root.resolve()).encode()).hexdigest()[:16]
     return cache / (key + ".sqlite3")
 

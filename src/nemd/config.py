@@ -8,7 +8,7 @@ from pathlib import Path
 
 def config_path():
     home = os.environ.get("XDG_CONFIG_HOME")
-    return (Path(home).expanduser() if home else Path.home() / ".config") / "urag" / "config.json"
+    return (Path(home).expanduser() if home else Path.home() / ".config") / "nemd" / "config.json"
 
 
 def _read():
