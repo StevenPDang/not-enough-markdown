@@ -11,7 +11,10 @@ nemd is a local CLI for searching documentation in a project. Its name is a nod 
 
 ## Demo
 
-`![nemd search demo](docs/demo.gif)`
+![nemd search demo](docs/demo.gif)
+
+Demo repository: [RelBench by Stanford STAR](https://github.com/stanford-star/relbench).
+
 ## Getting Started
 
 Requires Python 3.9+ with SQLite FTS5 (included in common Python builds).
