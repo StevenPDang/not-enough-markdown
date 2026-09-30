@@ -7,7 +7,7 @@ nemd is a local CLI for searching documentation in a project. Its name is a nod 
 - Local search across Markdown, MDX, reStructuredText, AsciiDoc, and plain text.
 - Ranked results with excerpts, source paths, line numbers, and an interactive terminal viewer.
 - Automatic index refresh, typo matching, and offline operation.
-- **Experimental semantic search:** optional local model and semantic graph for concept matching.
+- \**Experimental\** semantic search: optional local model and semantic graph for *more* natural language queries.
 
 ## Demo
 
