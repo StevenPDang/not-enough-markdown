@@ -1,6 +1,6 @@
 # Not Enough Markdown
 
-nemd is a CLI you can install with `uv` to fuzzy search documentation in a codebase. It builds a local SQLite index of document sections, including Markdown headings, code blocks, and identifiers, then returns the top `k` matching passages with source paths and line numbers. Search refreshes the index automatically when documents change. The name is a nod to the Minecraft mod Not Enough Items (NEI).
+nemd is a CLI you can install with `uv` to fuzzy search documentation in a codebase. It builds a local SQLite index of document sections, including Markdown headings, code blocks, and identifiers, then returns the top `k` matching passages with source paths and line numbers. Search refreshes the index automatically when documents change. Named after the popular Minecraft mod Not Enough Items (NEI)!
 
 ## Features
 
