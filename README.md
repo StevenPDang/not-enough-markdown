@@ -1,4 +1,8 @@
-# Not Enough Markdown
+# Not Enough Markdown (nemd)
+![Static Badge](https://img.shields.io/badge/PyPI-v0.1.0-green)
+
+[Getting Started](#getting-started) | [Development](#development)
+
 
 nemd is a CLI you can install with `uv` to fuzzy search documentation in a codebase. It builds a local SQLite index of document sections, including Markdown headings, code blocks, and identifiers, then returns the top `k` matching passages with source paths and line numbers. Search refreshes the index automatically when documents change. Named after the popular Minecraft mod Not Enough Items (NEI)!
 
